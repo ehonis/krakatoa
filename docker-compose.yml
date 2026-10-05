@@ -1,0 +1,19 @@
+services:
+  krakatoa:
+    build:
+      context: .
+      args:
+        WITH_CLAUDE: "0"   # "1" to include the Claude Code CLI for Ask AI and the label reader
+    ports:
+      - "8101:8101"
+    volumes:
+      - krakatoa-data:/data
+      - claude-home:/home/node/.claude   # keeps a `claude` sign-in across rebuilds
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped
+
+volumes:
+  krakatoa-data:
+  claude-home:

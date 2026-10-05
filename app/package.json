@@ -1,0 +1,42 @@
+{
+  "name": "krakatoa-app",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ehonis/krakatoa.git",
+    "directory": "app"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "npm run lint && node handoff.test.js && npm run test:food && npm run test:combos && npm run test:restaurants && npm run test:label && npm run test:ask && npm run test:mcp && npm run test:macros && npm run test:whoop && npm run test:balance && npm run test:nutrition && npm run test:digest && npm run test:auth && node signout.test.js",
+    "test:food": "node food.test.js",
+    "test:nutrition": "node ../server/nutrition.test.js",
+    "test:digest": "node ../server/digest.test.js",
+    "lint": "eslint src",
+    "test:combos": "node combos.test.js",
+    "test:whoop": "node whoop.test.js",
+    "test:balance": "esbuild balance.test.jsx --bundle --platform=node --format=esm --jsx=automatic --packages=external --outfile=.balance.mjs --log-level=error && node .balance.mjs",
+    "test:macros": "node macros.test.js",
+    "test:restaurants": "node restaurants.test.js",
+    "test:label": "node label.test.js && node ../server/label.test.js",
+    "test:ask": "node ask.test.js && node ../server/ai.test.js && node ../server/aithreads.test.js",
+    "test:mcp": "node ../server/mcp.test.js",
+    "test:auth": "node ../server/auth.test.js && node ../server/install.test.js"
+  },
+  "dependencies": {
+    "lucide-react": "^1.28.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zxing-wasm": "^2.1.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.1.0",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "vite": "^7.1.5"
+  }
+}

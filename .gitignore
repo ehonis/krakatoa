@@ -1,0 +1,18 @@
+node_modules/
+dist/
+data/
+.smoke.mjs
+*.log
+# The USDA bulk download the basics script reads. Fetch it on demand:
+#   curl -sL -o /tmp/fdc_sr.zip <the URL in scripts/basics.build.mjs>
+*.zip
+.balance.mjs
+# Local environment. .env.example is the committed template.
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Owner-only agent notes. Never committed.
+AGENTS.local.md
+CLAUDE.local.md

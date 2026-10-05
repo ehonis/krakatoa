@@ -1,0 +1,22 @@
+# Never in the image: dependencies, build output, the log, local env, and the
+# owner's private agent notes.
+node_modules
+app/node_modules
+dist
+data
+.env
+.env.*
+!.env.example
+app/.env
+app/.env.*
+AGENTS.local.md
+CLAUDE.local.md
+**/AGENTS.local.md
+**/CLAUDE.local.md
+.smoke.mjs
+.balance.mjs
+app/.balance.mjs
+*.zip
+.DS_Store
+.git
+*.log
