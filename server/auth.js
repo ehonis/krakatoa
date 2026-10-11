@@ -16,6 +16,12 @@
  *     password bumps it and rotates the signing key.
  *   - Machine callers (an MCP gateway, scripts) send `Authorization: Bearer <token>`
  *     with the API token from Settings or the Totem bridge secret.
+ *   - The iPhone app (mobile/) signs in with the same username and password but
+ *     keeps the session in the keychain rather than a cookie jar: it asks for the
+ *     session in the sign-in reply (`X-Krakatoa-Client: native`) and sends it back
+ *     as `X-Krakatoa-Session`. Same signature, same version check, same sign-out.
+ *     A browser cannot send that header cross-site without a CORS preflight, which
+ *     this server never answers, so it opens nothing a cookie does not.
  *   - KRAKATOA_AUTH=proxy turns all of this off for an install that already sits
  *     behind an authenticating proxy such as Cloudflare Access.
  */
@@ -25,6 +31,7 @@ const fs = require('fs')
 const path = require('path')
 
 const COOKIE = 'krakatoa_session'
+const SESSION_HEADER = 'x-krakatoa-session'
 const SESSION_DAYS = 30
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 }
 
@@ -159,12 +166,20 @@ function makeAuth({ dataDir }) {
     return `${payload}.${sign(payload, o.sessionKey)}`
   }
 
-  /** The signed-in user from a request's cookies, or null. */
-  function readSession(req, now = Date.now()) {
+  /** The session a request carries: a browser's cookie, else the native app's header. */
+  function sessionValue(req) {
     const raw = parseCookies(req.headers?.cookie)[COOKIE]
-    if (!raw) return null
-    let value
-    try { value = decodeURIComponent(raw) } catch { return null }
+    if (raw) {
+      try { return decodeURIComponent(raw) } catch { return null }
+    }
+    const header = req.headers?.[SESSION_HEADER]
+    return typeof header === 'string' && header.trim() ? header.trim() : null
+  }
+
+  /** The signed-in user from a request's cookie or session header, or null. */
+  function readSession(req, now = Date.now()) {
+    const value = sessionValue(req)
+    if (!value) return null
     const [payload, mac] = value.split('.')
     const o = read()
     if (!payload || !mac || !o?.sessionKey) return null
@@ -239,4 +254,7 @@ const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1'])
 /** Is the TCP peer this machine? (cloudflared and local reverse proxies are.) */
 const isLoopback = (addr) => LOOPBACK.has(String(addr || '')) || /^127\./.test(String(addr || '')) || /^::ffff:127\./.test(String(addr || ''))
 
-module.exports = { makeAuth, makeLimiter, hashPassword, verifyPassword, parseCookies, isHttps, isLoopback, passwordProblem, COOKIE }
+/** The iPhone app asks for its session in the reply instead of a cookie. */
+const isNativeClient = (req) => String(req.headers?.['x-krakatoa-client'] || '').toLowerCase() === 'native'
+
+module.exports = { makeAuth, makeLimiter, hashPassword, verifyPassword, parseCookies, isHttps, isLoopback, isNativeClient, passwordProblem, COOKIE, SESSION_HEADER }

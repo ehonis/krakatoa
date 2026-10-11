@@ -53,6 +53,7 @@ disk. Default port **8101**.
 | The day screen | `app/src/today.jsx` |
 | Scan / search / recents / by hand | `app/src/add.jsx` |
 | The camera | `app/src/scanner.jsx` |
+| The iPhone app (Expo; its own install, read `mobile/AGENTS.md`) | `mobile/` |
 | An overlay, and what it becomes on a desktop | `app/src/overlay.jsx` |
 | Runtime state — **gitignored, this is the real log** | `data/state.json` |
 | Owner account and settings — **0600** | `data/owner.json`, `data/settings.json` |
@@ -120,6 +121,13 @@ shows which build is being served.
 - **Machine callers** (MCP clients, scripts) use `Authorization: Bearer <token>`:
   the API token from Settings (`KRAKATOA_API_TOKEN`), or the Totem bridge
   secret. A bearer opens `/api/*` and `/mcp`, never the pages.
+- **The iPhone app** (`mobile/`) signs in with the owner's password like a
+  browser, but sends `X-Krakatoa-Client: native` and gets the session in the
+  JSON reply instead of a cookie (also on a password change). It sends it back
+  as `X-Krakatoa-Session`, which `readSession` accepts when there is no cookie.
+  It is a session, not a token: Settings writes work, sign-out ends it. A
+  browser cannot send that header cross-site without a CORS preflight, which
+  this server never answers. Tested in `auth.test.js` and `install.test.js`.
 - **`KRAKATOA_AUTH=proxy`** turns sign-in off for an install already behind an
   authenticating proxy. Then the proxy is the whole trust boundary.
 - The gate is in `server.js` (`authRoutes`, then `gate`). Icons, the manifest

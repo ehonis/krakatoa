@@ -1219,7 +1219,11 @@ async function authRoutes(req, res, url) {
       return (wantsJson(req) ? send(res, 401, { error: msg }) : html(res, 401, pages.loginPage({ next, message: msg }))), true
     }
     loginLimiter.reset(key)
-    const cookie = auth.cookie(auth.issueSession(user.username), { secure })
+    const session = auth.issueSession(user.username)
+    // The iPhone app keeps the session in its keychain and sends it as a header,
+    // so it gets the value itself and no cookie (server/auth.js).
+    if (wantsJson(req) && authMod.isNativeClient(req)) return send(res, 200, { ok: true, user: user.username, session }), true
+    const cookie = auth.cookie(session, { secure })
     return (wantsJson(req) ? send(res, 200, { ok: true, user: user.username }, { 'set-cookie': cookie }) : redirect(res, next, { 'set-cookie': cookie })), true
   }
 
@@ -1241,8 +1245,10 @@ async function authRoutes(req, res, url) {
     try {
       const user = auth.changePassword(f.current, f.next)
       // The signing key rotated, so every other device is signed out; this one
-      // gets a fresh cookie and stays in.
-      return send(res, 200, { ok: true }, { 'set-cookie': auth.cookie(auth.issueSession(user.username), { secure }) }), true
+      // gets a fresh session and stays in (as a cookie, or for the app, in the reply).
+      const session = auth.issueSession(user.username)
+      if (authMod.isNativeClient(req)) return send(res, 200, { ok: true, session }), true
+      return send(res, 200, { ok: true }, { 'set-cookie': auth.cookie(session, { secure }) }), true
     } catch (err) {
       return send(res, 400, { error: err.message }), true
     }
