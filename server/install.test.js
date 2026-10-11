@@ -241,6 +241,43 @@ test('fresh install: setup token, owner, session, bearer, everything off', async
   assert.equal((await http(s.base, '/api/state', { cookie: fresh })).status, 401)
 })
 
+test('the iPhone app signs in for a session it sends as a header', async () => {
+  const s = await boot()
+  await http(s.base, '/api/auth/setup', { body: { token: s.token, username: 'me', password: 'long enough pw' } })
+  const native = { 'x-krakatoa-client': 'native' }
+
+  // The browser's reply is unchanged: a cookie, and no session in the body.
+  let r = await http(s.base, '/api/auth/login', { body: { username: 'me', password: 'long enough pw' } })
+  assert.match(r.setCookie, /krakatoa_session=/)
+  assert.equal(r.json.session, undefined)
+
+  // The app's reply carries the session and sets no cookie.
+  r = await http(s.base, '/api/auth/login', { body: { username: 'me', password: 'long enough pw' }, headers: native })
+  assert.equal(r.status, 200)
+  assert.equal(r.setCookie, '')
+  const session = r.json.session
+  assert.ok(session && session.includes('.'))
+  const app = { 'x-krakatoa-session': session }
+  assert.equal((await http(s.base, '/api/state', { headers: app })).status, 200)
+  assert.equal((await http(s.base, '/api/me', { headers: app })).json.user, 'me')
+  // A session, not a token: Settings may be changed with it.
+  assert.equal((await http(s.base, '/api/settings', { method: 'PUT', headers: app, body: { usda: { key: 'a-usda-key-for-test' } } })).status, 200)
+  assert.equal((await http(s.base, '/api/state', { headers: { 'x-krakatoa-session': `${session}x` } })).status, 401)
+  assert.equal((await http(s.base, '/api/auth/login', { body: { username: 'me', password: 'wrong wrong' }, headers: native })).status, 401)
+
+  // Changing the password hands the app its next session in the reply.
+  r = await http(s.base, '/api/auth/password', { headers: { ...app, ...native }, body: { current: 'long enough pw', next: 'a brand new password' } })
+  assert.equal(r.status, 200)
+  assert.equal(r.setCookie, '')
+  assert.equal((await http(s.base, '/api/state', { headers: app })).status, 401, 'the old one ended')
+  const next = { 'x-krakatoa-session': r.json.session }
+  assert.equal((await http(s.base, '/api/state', { headers: next })).status, 200)
+
+  // Sign-out with the header ends that session.
+  assert.equal((await http(s.base, '/api/auth/logout', { headers: next, body: {} })).status, 200)
+  assert.equal((await http(s.base, '/api/state', { headers: next })).status, 401)
+})
+
 test('the sign-in lockout cannot be dodged with forged forwarding headers', async () => {
   const s = await boot({ KRAKATOA_TRUST_PROXY: '0' })
   await http(s.base, '/api/auth/setup', { body: { token: s.token, username: 'me', password: 'long enough pw' } })

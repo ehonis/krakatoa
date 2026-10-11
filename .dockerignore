@@ -2,6 +2,8 @@
 # owner's private agent notes.
 node_modules
 app/node_modules
+# The iPhone app is built by EAS, never into the server image.
+mobile
 dist
 data
 .env

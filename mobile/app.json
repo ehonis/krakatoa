@@ -1,0 +1,74 @@
+{
+  "expo": {
+    "name": "Krakatoa",
+    "slug": "krakatoa-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "krakatoa",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0d0f12",
+    "ios": {
+      "bundleIdentifier": "com.example.krakatoa",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.example.krakatoa",
+      "adaptiveIcon": {
+        "backgroundColor": "#0d0f12",
+        "foregroundImage": "./assets/icon.png"
+      }
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0d0f12",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 120
+        }
+      ],
+      "expo-status-bar",
+      "expo-secure-store",
+      "expo-sqlite",
+      "expo-web-browser",
+      "expo-image",
+      "expo-asset",
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Krakatoa uses the camera to scan barcodes and photograph nutrition labels.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Krakatoa reads a nutrition label, a receipt or a plate from a photo you pick.",
+          "cameraPermission": "Krakatoa uses the camera to scan barcodes and photograph nutrition labels.",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false,
+      "reactCompiler": false
+    },
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    }
+  }
+}

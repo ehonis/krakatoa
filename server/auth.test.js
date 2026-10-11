@@ -83,6 +83,21 @@ test('a session cookie round-trips, and a forged or expired one does not', () =>
   assert.equal(auth.readSession(req({})), null)
 })
 
+test("the iPhone app's session header is the same session as the cookie", () => {
+  const auth = A.makeAuth({ dataDir: tmp() })
+  auth.createOwner({ token: auth.issueSetupToken(), username: 'me', password: 'long enough pw' })
+  const v = auth.issueSession('me')
+  assert.deepEqual(auth.readSession(req({ [A.SESSION_HEADER]: v })), { username: 'me' })
+  assert.equal(auth.readSession(req({ [A.SESSION_HEADER]: `${v}x` })), null, 'bad mac')
+  assert.equal(auth.readSession(req({ [A.SESSION_HEADER]: '' })), null)
+  // A cookie, when there is one, is what counts: a bad cookie is not rescued by a header.
+  assert.equal(auth.readSession(req({ cookie: `${A.COOKIE}=nope`, [A.SESSION_HEADER]: v })), null)
+  auth.revokeSessions()
+  assert.equal(auth.readSession(req({ [A.SESSION_HEADER]: v })), null, 'sign-out ends it too')
+  assert.equal(A.isNativeClient(req({ 'x-krakatoa-client': 'native' })), true)
+  assert.equal(A.isNativeClient(req({})), false)
+})
+
 test('the cookie is httpOnly and SameSite=Lax, and Secure only when asked', () => {
   const auth = A.makeAuth({ dataDir: tmp() })
   const plain = auth.cookie('v', { secure: false })
