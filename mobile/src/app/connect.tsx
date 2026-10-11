@@ -1,9 +1,10 @@
-// First run: where the Krakatoa server is, and the owner's username and password.
-// The web needs neither (it is served by the server and signs in on its /login
-// page); the app has no origin of its own, so it asks for the address too, signs
-// in for a session it keeps in the keychain (server/auth.js), and sends that on
-// every request. A server with KRAKATOA_AUTH=proxy asks for no password, and one
-// behind Cloudflare Access gets its login page first (cfAccess.ts).
+// First run: where the Krakatoa server is, and only if it asks, the owner's
+// username and password. The web needs neither (it is served by the server and
+// signs in on its /login page); the app has no origin of its own, so it asks for
+// the address, gets past Cloudflare Access if the server sits behind it
+// (cfAccess.ts), and then asks the server how it signs in. A server with
+// KRAKATOA_AUTH=proxy is done at that point; otherwise the password fields appear
+// and the session they buy is kept in the keychain (server/auth.js).
 import React, { useRef, useState } from 'react'
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, type TextInput } from 'react-native'
 import { Image } from 'expo-image'
@@ -15,7 +16,7 @@ import { getConnection, normalizeBaseUrl, saveConnection } from '../lib/connecti
 import { probeAccess, signInWithAccess } from '../lib/cfAccess'
 import { success, warn } from '../ui/haptics'
 
-type Outcome = { error: string } | { mode: 'proxy' } | { mode: 'session'; session: string; user: string }
+type Outcome = { error: string } | { needsPassword: true } | { mode: 'proxy' } | { mode: 'session'; session: string; user: string }
 
 async function signIn(baseUrl: string, username: string, password: string, accessToken?: string): Promise<Outcome> {
   const ctl = new AbortController()
@@ -31,7 +32,7 @@ async function signIn(baseUrl: string, username: string, password: string, acces
     if (me.ok && meBody?.authMode) return { error: 'That server answered without asking who you are. Is this Krakatoa?' }
     if (me.status === 401 && meBody?.setup) return { error: 'This Krakatoa is not set up yet. Open the one-time setup link from its log in a browser and create the owner, then sign in here.' }
     if (me.status !== 401) return { error: `The server answered ${me.status}. Is this Krakatoa?` }
-    if (!username.trim() || !password) return { error: "Sign in with the owner's username and password." }
+    if (!username.trim() || !password) return { needsPassword: true }
 
     const r = await fetch(`${baseUrl}/api/auth/login`, {
       ...opts,
@@ -59,6 +60,7 @@ export default function Connect() {
   const [address, setAddress] = useState(() => getConnection().baseUrl.replace(/^http:\/\//, ''))
   const [username, setUsername] = useState(() => getConnection().user || '')
   const [password, setPassword] = useState('')
+  const [askPassword, setAskPassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [stage, setStage] = useState('')
@@ -88,6 +90,11 @@ export default function Connect() {
     }
     const out = await signIn(baseUrl, username, password, accessToken)
     setBusy(false)
+    if ('needsPassword' in out) {
+      if (askPassword) { warn(); setError("Sign in with the owner's username and password.") }
+      else { setAskPassword(true); setTimeout(() => userRef.current?.focus(), 50) }
+      return
+    }
     if ('error' in out) { warn(); setError(out.error); return }
     success()
     setPassword('')
@@ -105,56 +112,62 @@ export default function Connect() {
           </View>
           <T size={22} weight={700} style={{ marginBottom: 6 }}>Connect to Krakatoa</T>
           <T muted size={15} style={{ marginBottom: 16 }}>
-            The address of the machine running Krakatoa (a Tailscale IP works), and the owner's username and password.
+            {askPassword
+              ? "This Krakatoa asks who you are: the owner's username and password."
+              : 'The address of the machine running Krakatoa: its domain, or a Tailscale IP.'}
           </T>
           <Input
             value={address}
-            onChangeText={setAddress}
+            onChangeText={(v) => { setAddress(v); setAskPassword(false); setError('') }}
             placeholder="100.x.y.z or food.example.com"
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
             textContentType="URL"
-            returnKeyType="next"
-            onSubmitEditing={() => userRef.current?.focus()}
+            returnKeyType={askPassword ? 'next' : 'go'}
+            onSubmitEditing={() => (askPassword ? userRef.current?.focus() : submit())}
             accessibilityLabel="Server address"
             boxStyle={{ marginBottom: 12, backgroundColor: colors.bg }}
           />
-          <Input
-            ref={userRef}
-            value={username}
-            onChangeText={setUsername}
-            placeholder="Username"
-            autoCapitalize="none"
-            autoCorrect={false}
-            textContentType="username"
-            autoComplete="username"
-            returnKeyType="next"
-            onSubmitEditing={() => passRef.current?.focus()}
-            accessibilityLabel="Username"
-            boxStyle={{ marginBottom: 12, backgroundColor: colors.bg }}
-          />
-          <Input
-            ref={passRef}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Password"
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            textContentType="password"
-            autoComplete="current-password"
-            returnKeyType="go"
-            onSubmitEditing={submit}
-            accessibilityLabel="Password"
-            boxStyle={{ marginBottom: 12, backgroundColor: colors.bg }}
-          />
+          {askPassword ? (
+            <>
+              <Input
+                ref={userRef}
+                value={username}
+                onChangeText={setUsername}
+                placeholder="Username"
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="username"
+                autoComplete="username"
+                returnKeyType="next"
+                onSubmitEditing={() => passRef.current?.focus()}
+                accessibilityLabel="Username"
+                boxStyle={{ marginBottom: 12, backgroundColor: colors.bg }}
+              />
+              <Input
+                ref={passRef}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Password"
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="password"
+                autoComplete="current-password"
+                returnKeyType="go"
+                onSubmitEditing={submit}
+                accessibilityLabel="Password"
+                boxStyle={{ marginBottom: 12, backgroundColor: colors.bg }}
+              />
+            </>
+          ) : null}
           {stage ? <T muted style={{ marginBottom: 12 }}>{stage}</T> : null}
           {error ? <T color={colors.danger} style={{ marginBottom: 12 }}>{error}</T> : null}
           <Btn kind="primary" title="Connect" loading={busy} disabled={!address.trim()} onPress={submit} />
           <T muted size={12.5} lineHeight={18} style={{ marginTop: 14 }}>
-            An IP or Tailscale name uses port 8101; a domain uses https (Cloudflare Access sign-in is handled). A server
-            that leaves sign-in to a proxy needs no password. The session is kept in the iOS keychain.
+            A domain uses https, and Cloudflare Access sign-in is handled; an IP or Tailscale name uses port 8101. A
+            server that leaves sign-in to a proxy needs no password. The session is kept in the iOS keychain.
           </T>
         </View>
       </ScrollView>
