@@ -166,7 +166,7 @@ jobs:
           if [ "$live" = 0 ]; then echo "build=true" >> "$GITHUB_OUTPUT"; echo "Native code changed: no build has runtime $rv yet."; else echo "A build has runtime $rv."; fi
 
       - name: Publish the update
-        run: npx eas-cli update --channel production --platform ios --non-interactive --message "$(git log -1 --format=%s)"
+        run: npx eas-cli update --channel production --platform ios --environment production --non-interactive --message "$(git log -1 --format=%s)"
 
       - name: Start an App Store build
         if: steps.native.outputs.build == 'true'
