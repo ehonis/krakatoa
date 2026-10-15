@@ -2,7 +2,8 @@
  * Krakatoa — Settings. Ported from app/src/settings.jsx.
  *
  * Everything a new install needs, set up from the app: the account, the AI,
- * the food-database keys, and the optional connection to a Totem bridge. Each
+ * the food-database keys, and the optional connections to Bushido (WHOOP) and a
+ * Totem bridge (the habit push). Each
  * section saves on its own. A field set by the server's environment is shown
  * locked with the variable's name, because the environment always wins and an
  * editable box that changes nothing is a lie. Stored secrets never come back
@@ -398,6 +399,44 @@ function Databases({ s, d, save, test }: { s: any; d: D; save: Save; test: Test 
 
 /* ------------------------------------------------------------- connections */
 
+/* WHOOP's burn, read from Bushido, which holds the WHOOP grant. On when it has
+   a URL and a token; there is no switch, because there is no default URL. A
+   server from before Bushido sends no `bushido` section, and then it is hidden. */
+function BushidoLink({ s, d, save, test }: { s: any; d: D; save: Save; test: Test }) {
+  const [result, setResult] = useState<Res>(null)
+  const b = s.bushido
+  if (!b) return null
+  const onSave = async (doTest: boolean) => {
+    setResult({ busy: doTest ? 'Connecting…' : 'Saving…' })
+    try {
+      if (d.draft.bushido) await save('bushido')
+      setResult(doTest ? await test('bushido') : { ok: true, detail: 'Saved.' })
+    } catch (e: any) { setResult({ ok: false, detail: e.message }) }
+  }
+  return (
+    <Section>
+      <ListHead icon={Plug} title="WHOOP, through Bushido (optional)" />
+      <Lead>
+        For people who also run Bushido, the training app that holds the WHOOP connection. With a Bushido URL and token, the day
+        shows WHOOP's calorie burn beside what you ate. Without them, Krakatoa never contacts it and the energy panel is hidden.
+      </Lead>
+      <View style={{ flexDirection: 'row' }}>
+        <Pill ok={b.connected}>{b.connected ? 'Connected' : 'Not connected'}</Pill>
+      </View>
+      <Field label="Bushido URL" f={b.url} value={d.get('bushido', 'url', b.url.from === 'settings' ? b.url.value : '')}
+        onChange={d.set('bushido', 'url')} placeholder={b.url.value || 'http://127.0.0.1:8099'}
+        hint={d.draft.bushido?.url !== undefined ? 'A new URL needs its own token: enter it below. The old one is not sent to a new address.' : null} />
+      <Field label="Bushido API token" f={b.token} value={d.get('bushido', 'token')} onChange={d.set('bushido', 'token')}
+        placeholder="Bushido's API token" />
+      <RowBtns>
+        <Btn flex title={d.draft.bushido ? 'Save and connect' : 'Test'} disabled={!b.connected && !d.draft.bushido} onPress={() => onSave(true)} />
+        <Btn flex kind="primary" title="Save" disabled={!d.draft.bushido} onPress={() => onSave(false)} />
+      </RowBtns>
+      <Result r={result} />
+    </Section>
+  )
+}
+
 function Connections({ s, d, save, test, saveNow }: { s: any; d: D; save: Save; test: Test; saveNow: SaveNow }) {
   const [result, setResult] = useState<Res>(null)
   const t = s.totem
@@ -413,9 +452,8 @@ function Connections({ s, d, save, test, saveNow }: { s: any; d: D; save: Save; 
     <Section>
       <ListHead icon={Plug} title="Totem bridge (optional)" />
       <Lead>
-        For people who also run Totem, a personal assistant that holds the WHOOP connection. With the bridge on, the day shows
-        WHOOP's calorie burn beside what you ate, and each logged day is written to a Totem habit. Off, Krakatoa never contacts it
-        and the energy panel is hidden.
+        For people who also run Totem, a personal assistant. With the bridge on, each logged day is written to a Totem habit.
+        Off, Krakatoa never contacts it.
       </Lead>
       <View style={{ flexDirection: 'row' }}>
         <Pill ok={t.connected}>{t.connected ? 'Connected' : 'Not connected'}</Pill>
@@ -560,6 +598,7 @@ export default function SettingsPane() {
           <Account s={s} />
           <AISection s={s} d={d} save={save} test={test} onLayout={(e) => setAiY(e.nativeEvent.layout.y)} />
           <Databases s={s} d={d} save={save} test={test} />
+          <BushidoLink s={s} d={d} save={save} test={test} />
           <Connections s={s} d={d} save={save} test={test} saveNow={saveNow} />
           <Access s={s} d={d} save={save} saveNow={saveNow} />
         </>

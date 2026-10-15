@@ -17,7 +17,7 @@
     "test:digest": "node ../server/digest.test.js",
     "lint": "eslint src",
     "test:combos": "node combos.test.js",
-    "test:whoop": "node whoop.test.js",
+    "test:whoop": "node whoop.test.js && node ../server/whoop.test.js",
     "test:balance": "esbuild balance.test.jsx --bundle --platform=node --format=esm --jsx=automatic --packages=external --outfile=.balance.mjs --log-level=error && node .balance.mjs",
     "test:macros": "node macros.test.js",
     "test:restaurants": "node restaurants.test.js",

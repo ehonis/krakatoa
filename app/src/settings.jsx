@@ -2,7 +2,8 @@
  * Krakatoa — Settings.
  *
  * Everything a new install needs, set up in the browser: the account, the AI,
- * the food-database keys, and the optional connection to a Totem bridge. Each
+ * the food-database keys, and the optional connections to Bushido (WHOOP) and a
+ * Totem bridge (the habit push). Each
  * section saves on its own. A field set by the server's environment is shown
  * locked with the variable's name, because the environment always wins and an
  * editable box that changes nothing is a lie. Stored secrets never come back
@@ -300,6 +301,43 @@ function Databases({ s, d, save, test }) {
 
 /* ------------------------------------------------------------- connections */
 
+/* WHOOP's burn, read from Bushido, which holds the WHOOP grant. On when it has
+   a URL and a token; there is no switch, because there is no default URL. */
+function BushidoLink({ s, d, save, test }) {
+  const [result, setResult] = useState(null)
+  const b = s.bushido
+  if (!b) return null
+  const onSave = async (doTest) => {
+    setResult({ busy: doTest ? 'Connecting…' : 'Saving…' })
+    try {
+      if (d.draft.bushido) await save('bushido')
+      setResult(doTest ? await test('bushido') : { ok: true, detail: 'Saved.' })
+    } catch (e) { setResult({ ok: false, detail: e.message }) }
+  }
+  return (
+    <section className="set-section">
+      <h3 className="list-head"><Plug size={16} /> WHOOP, through Bushido (optional)</h3>
+      <p className="muted">
+        For people who also run Bushido, the training app that holds the WHOOP connection. With a Bushido URL and token, the day
+        shows WHOOP's calorie burn beside what you ate. Without them, Krakatoa never contacts it and the energy panel is hidden.
+      </p>
+      <p className="set-pill-row">
+        <span className={`set-pill ${b.connected ? 'ok' : ''}`}>{b.connected ? 'Connected' : 'Not connected'}</span>
+      </p>
+      <Field id="bushido-url" label="Bushido URL" f={b.url} value={d.get('bushido', 'url', b.url.from === 'settings' ? b.url.value : '')}
+        onChange={d.set('bushido', 'url')} placeholder={b.url.value || 'http://127.0.0.1:8099'}
+        hint={d.draft.bushido?.url !== undefined ? 'A new URL needs its own token: enter it below. The old one is not sent to a new address.' : null} />
+      <Field id="bushido-token" label="Bushido API token" f={b.token} value={d.get('bushido', 'token')} onChange={d.set('bushido', 'token')}
+        placeholder="Bushido's API token" />
+      <div className="row-btns">
+        <button className="btn" disabled={!b.connected && !d.draft.bushido} onClick={() => onSave(true)}>{d.draft.bushido ? 'Save and connect' : 'Test'}</button>
+        <button className="btn btn-primary" disabled={!d.draft.bushido} onClick={() => onSave(false)}>Save</button>
+      </div>
+      <Result r={result} />
+    </section>
+  )
+}
+
 function Connections({ s, d, save, test, saveNow }) {
   const [result, setResult] = useState(null)
   const t = s.totem
@@ -315,9 +353,8 @@ function Connections({ s, d, save, test, saveNow }) {
     <section className="set-section">
       <h3 className="list-head"><Plug size={16} /> Totem bridge (optional)</h3>
       <p className="muted">
-        For people who also run Totem, a personal assistant that holds the WHOOP connection. With the bridge on, the day shows
-        WHOOP's calorie burn beside what you ate, and each logged day is written to a Totem habit. Off, Krakatoa never contacts it
-        and the energy panel is hidden.
+        For people who also run Totem, a personal assistant. With the bridge on, each logged day is written to a Totem habit.
+        Off, Krakatoa never contacts it.
       </p>
       <p className="set-pill-row">
         <span className={`set-pill ${t.connected ? 'ok' : ''}`}>{t.connected ? 'Connected' : 'Not connected'}</span>
@@ -445,6 +482,7 @@ export default function SettingsPane({ section = null, onClose }) {
             <Account s={s} />
             <AISection s={s} d={d} save={save} test={test} />
             <Databases s={s} d={d} save={save} test={test} />
+            <BushidoLink s={s} d={d} save={save} test={test} />
             <Connections s={s} d={d} save={save} test={test} saveNow={saveNow} />
             <Access s={s} d={d} save={save} saveNow={saveNow} />
           </>

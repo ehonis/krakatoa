@@ -158,6 +158,7 @@ test('a fresh data dir gets settings with every outside link off', () => {
   assert.equal(e.auth.mode, 'builtin')
   assert.equal(e.totem.enabled.value, false)
   assert.equal(S.totemConfig(e), null)
+  assert.equal(S.bushidoConfig(e), null, 'no Bushido, so no WHOOP')
   assert.equal(e.digestFile.value, false)
   assert.equal(e.usda.value, '')
 })
@@ -310,6 +311,58 @@ test("Totem's .env has no default; an upgraded install records it only if it exi
   s2.migrate()
   assert.equal(s2.stored().totem.envFile, path.join(home, 'projects', 'personal-assistant', '.env'))
   assert.equal(S.totemConfig(s2.effective()).secret, 'abc')
+})
+
+test('Bushido is on only with a URL and a token, env first', () => {
+  const dir = tmp()
+  const mk = (env) => S.makeSettings({ dataDir: dir, env: { HOME: dir, ...env }, log: () => {} })
+  assert.equal(S.bushidoConfig(mk({}).effective()), null)
+  assert.equal(S.bushidoConfig(mk({ BUSHIDO_API_URL: 'http://127.0.0.1:8099' }).effective()), null, 'a URL alone is off')
+  assert.equal(S.bushidoConfig(mk({ BUSHIDO_API_TOKEN: 't' }).effective()), null, 'a token alone is off: there is no default URL')
+  assert.deepEqual(S.bushidoConfig(mk({ BUSHIDO_API_URL: 'http://127.0.0.1:8099/', BUSHIDO_API_TOKEN: 'tok' }).effective()),
+    { url: 'http://127.0.0.1:8099', token: 'tok' })
+  // An existing install keeps the bridge but gets no Bushido: nothing is migrated.
+  const old = tmp()
+  fs.writeFileSync(path.join(old, 'state.json'), '{"entries":{}}')
+  const so = S.makeSettings({ dataDir: old, env: { HOME: old }, log: () => {} })
+  so.migrate()
+  assert.equal(so.stored().bushido, undefined)
+  assert.equal(S.bushidoConfig(so.effective()), null)
+
+  // From Settings, and the token never goes back to the browser.
+  const s = mk({})
+  s.save(S.guardUrls(S.cleanPatch({ bushido: { url: 'http://127.0.0.1:8099', token: 'stored-bushido-token' } }), s.effective()))
+  assert.deepEqual(S.bushidoConfig(s.effective()), { url: 'http://127.0.0.1:8099', token: 'stored-bushido-token' })
+  const view = S.publicView(s.effective())
+  assert.equal(view.bushido.connected, true)
+  assert.equal(view.bushido.token.set, true)
+  assert.ok(!JSON.stringify(view).includes('stored-bushido-token'))
+  assert.deepEqual(S.cleanPatch({ bushido: { token: view.bushido.token.value } }), {}, 'the mask coming back is not a token')
+  assert.throws(() => S.cleanPatch({ bushido: { url: 'javascript:alert(1)' } }), /not a URL/)
+  // Env beats the stored value, and shows locked.
+  const d2 = tmp()
+  S.makeSettings({ dataDir: d2, env: {}, log: () => {} }).save({ bushido: { token: 'stored' } })
+  const e = S.makeSettings({ dataDir: d2, env: { BUSHIDO_API_TOKEN: 'env-token' }, log: () => {} }).effective()
+  assert.equal(e.bushido.token.value, 'env-token')
+  assert.equal(S.publicView(e).bushido.token.locked, true)
+})
+
+test('a new Bushido URL does not inherit the old token', () => {
+  const dir = tmp()
+  const env = { HOME: dir, BUSHIDO_API_URL: 'http://127.0.0.1:8099', BUSHIDO_API_TOKEN: 'env-token' }
+  const s = S.makeSettings({ dataDir: dir, env: { HOME: dir }, log: () => {} })
+  const withEnv = () => S.makeSettings({ dataDir: dir, env, log: () => {} }).effective()
+  // The same URL (give or take a slash) keeps the token.
+  s.save(S.guardUrls(S.cleanPatch({ bushido: { url: 'http://127.0.0.1:8099/' } }), withEnv()))
+  assert.equal(S.bushidoConfig(withEnv()).token, 'env-token')
+  // A different one sends nothing until a token is entered for it.
+  s.save(S.guardUrls(S.cleanPatch({ bushido: { url: 'https://elsewhere.example' } }), withEnv()))
+  assert.equal(s.stored().bushido.ownTokenOnly, true)
+  assert.equal(S.bushidoConfig(withEnv()), null, 'BUSHIDO_API_TOKEN is not sent to the new host')
+  s.save(S.guardUrls(S.cleanPatch({ bushido: { token: 'typed-for-new-url' } }), withEnv()))
+  assert.equal(S.bushidoConfig(withEnv()).token, 'typed-for-new-url')
+  // And the bridge guard is untouched by a Bushido patch.
+  assert.deepEqual(S.guardUrls({ bushido: { token: 'x' } }, withEnv()), { bushido: { token: 'x' } })
 })
 
 test("a new bridge URL does not inherit the old secret", () => {

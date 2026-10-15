@@ -3,20 +3,21 @@
  *
  * What he BURNED, so the day can say whether he is under or over. WHOOP computes
  * a whole-day energy expenditure from heart rate plus basal rate and publishes it
- * per cycle; the bridge already hands it over as `recovery[].calories`.
+ * per cycle; Bushido already hands it over as `recovery[].calories`.
  *
  * Three rules, inherited wholesale from Bushido and structural rather than a matter
  * of care (see `bushido/AGENTS.md` §6):
  *
  *   - ONE TOKEN HOLDER. WHOOP rotates its refresh token on every refresh and
- *     invalidates the old pair, so exactly one process may hold it — Totem.
- *     This app reads `GET /api/whoop/training` on the bridge with the same
- *     BRIDGE_SECRET the habit push uses, exactly as Bushido does. Copying the
- *     credentials here would give one member two grants and silently kill one.
+ *     invalidates the old pair, so exactly one process may hold it — Bushido.
+ *     This app asks Bushido for the owner's training data
+ *     (`POST /api/whoop/owner`, method `training`) with BUSHIDO_API_TOKEN.
+ *     Copying the credentials here would give one member two grants and
+ *     silently kill one.
  *   - THE CACHE IS DISPOSABLE. `data/whoop.json` is a refetchable mirror.
  *     Delete it freely; never hand-edit it, because the next pull overwrites the
  *     edit and it is a lie with a short life.
- *   - NOTHING BLOCKS ON IT. A WHOOP outage, a revoked grant or a bridge that is
+ *   - NOTHING BLOCKS ON IT. A WHOOP outage, a revoked grant or a Bushido that is
  *     down must leave the cache as it was and must never fail a food log. A day
  *     with no burn figure simply has no balance line.
  *
@@ -37,27 +38,39 @@ const DAYS = Number(process.env.KRAKATOA_WHOOP_DAYS || 30)
 const NOT_CONFIGURED = Object.freeze({ fetchedAt: null, burn: {}, error: null, configured: false })
 
 /**
- * Pull from the bridge and reshape to the only thing this app wants: burn per
- * day. The bridge's payload also carries workouts, zones and heart rates, none
- * of which is Krakatoa's business — Bushido owns training.
+ * Pull from Bushido and reshape to the only thing this app wants: burn per day.
+ * The payload also carries workouts, zones and heart rates, none of which is
+ * Krakatoa's business — Bushido owns training.
+ *
+ * Bushido answers `200 { result }`, where `result` is the training payload
+ * (`{ ok, fetchedAt, days, maxHeartRate, body, workouts, recovery, sleep }`), or
+ * a non-2xx `{ error, needsReauth?, rateLimited? }`: 409 when it has no WHOOP set
+ * up, 403 for a wrong token, 429 rate limited, 502 for an error from WHOOP.
  */
-async function pull({ url, secret, days = DAYS } = {}) {
-  if (!url || !secret) throw new Error('The Totem bridge is not configured — see Settings.')
+async function pull({ url, token, days = DAYS } = {}) {
+  if (!url || !token) throw new Error('Bushido is not configured — see Settings.')
 
-  const res = await fetch(`${url}/api/whoop/training?days=${days}`, {
-    headers: { authorization: `Bearer ${secret}` },
+  const res = await fetch(`${url}/api/whoop/owner`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ method: 'training', args: [{ days }] }),
     signal: AbortSignal.timeout(15000),
   })
   const text = await res.text()
   if (!res.ok) {
-    // The bridge's message is the FIX ("authorized without read:workout",
-    // "reconnect WHOOP"), so it travels verbatim rather than being flattened.
+    // Bushido passes on WHOOP's message, and it is the FIX ("authorized without
+    // read:workout", "reconnect WHOOP"), so it travels verbatim rather than
+    // being flattened.
     let msg = text.slice(0, 200)
     try { msg = JSON.parse(text).error || msg } catch { /* not JSON, use the text */ }
-    throw new Error(msg)
+    throw new Error(msg || `Bushido answered ${res.status}.`)
   }
 
-  const body = JSON.parse(text)
+  let body
+  try { body = JSON.parse(text).result } catch { /* handled below */ }
+  if (!body || typeof body !== 'object') throw new Error('Bushido answered without a WHOOP result.')
+  if (body.ok === false) throw new Error(String(body.error || 'Bushido could not read WHOOP.').slice(0, 200))
+
   const burn = {}
   for (const row of body.recovery || []) {
     if (!row?.date) continue
@@ -79,7 +92,7 @@ async function pull({ url, secret, days = DAYS } = {}) {
 /* --------------------------------------------------------------- the cache */
 
 /*
- * `config()` is asked on every call and returns the bridge's `{ url, secret }`,
+ * `config()` is asked on every call and returns Bushido's `{ url, token }`,
  * or null when no source is configured. Null means OFF: no request is made, no
  * error is logged, and reads answer NOT_CONFIGURED so the screen shows no panel.
  */
@@ -112,7 +125,7 @@ function makeStore(file, { config = () => null } = {}) {
         return { ...doc, configured: true }
       } catch (e) {
         // The previous cache SURVIVES a failed pull. Yesterday's burn is still
-        // yesterday's burn, and blanking it because the bridge is down would
+        // yesterday's burn, and blanking it because Bushido is down would
         // lose a real number to a transient one.
         const prev = readFile()
         const doc = { ...prev, error: String(e.message || e), erroredAt: new Date().toISOString() }

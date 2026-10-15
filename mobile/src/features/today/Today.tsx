@@ -181,7 +181,7 @@ function ago(iso?: string) {
 export function Balance({ balance, whoop, onRefresh, refreshing }: { balance: BalanceT | null; whoop: Whoop | null; onRefresh?: () => void; refreshing: boolean }) {
   /*
    * The panel renders for the ERROR case even with no balance, because that is
-   * the state someone presses refresh to get out of: a bridge that is down or a
+   * the state someone presses refresh to get out of: a Bushido that is down or a
    * grant that needs reconnecting says so here, with WHOOP's own wording, rather
    * than the card silently not existing.
    */
@@ -276,7 +276,7 @@ export function Balance({ balance, whoop, onRefresh, refreshing }: { balance: Ba
 
       {/* A failed pull leaves the previous cache in place and carries its reason
           alongside — so the numbers above are still real and this says why they
-          did not move. The bridge's wording travels verbatim because it names
+          did not move. Bushido's wording (WHOOP's, passed on) travels verbatim because it names
           the fix ("reconnect WHOOP", "authorized without read:workout"). */}
       {err ? (
         <T size={13} muted align="center" lineHeight={19}><CircleAlert size={12} color={colors.muted} /> {err}</T>

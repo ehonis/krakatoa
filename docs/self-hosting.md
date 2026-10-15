@@ -118,7 +118,10 @@ with the Totem bridge and the digest file still on. If there is no
 proxy mode. An owner account means built-in sign-in, never proxy. If
 `$HOME/projects/personal-assistant/.env` exists, it is recorded as the place
 the bridge secret is read from; there is no default for that path otherwise. That is how the install
-already behaved, so it keeps working with no env change. To switch to built-in
+already behaved, so it keeps working with no env change. The one exception is
+WHOOP: it used to come through the Totem bridge and now comes from Bushido, so
+an install that showed WHOOP's burn needs `BUSHIDO_API_URL` and
+`BUSHIDO_API_TOKEN` (or Settings) to keep it. To switch to built-in
 sign-in later, set `KRAKATOA_AUTH=builtin` and use the printed setup link.
 
 ## Configuration
@@ -152,7 +155,7 @@ written:
   Nutritionix closed its free tier. Chain menus don't depend on it.
 
 There are no OAuth integrations in this app, so there are no redirect URIs to
-register. WHOOP is reached only through the Totem bridge (below).
+register. WHOOP is reached only through Bushido (below).
 
 ### Label reader and Ask AI
 
@@ -167,23 +170,38 @@ effort can be chosen there too; the defaults are `claude-sonnet-5` and
 `medium`. Without the CLI, the label form still works by hand, and the photo
 and Ask AI screens show a "Set up AI in Settings" prompt.
 
-### Totem bridge: WHOOP and the habit push
+### WHOOP, through Bushido
 
-Krakatoa holds no WHOOP credentials. It can read the day's burn from a bridge
-run by the author's personal assistant, Totem, and write one habit record per
-logged day to the same bridge. This is **off on a fresh install**. While it is
-off, Krakatoa never contacts the bridge, `/api/whoop` answers
-`configured: false`, and the day screen has no energy panel. Turn it on in
-Settings → Totem bridge, or with `KRAKATOA_TOTEM=1` or `KRAKATOA_TOTEM_URL`. It
+Krakatoa holds no WHOOP credentials. It can read the day's burn from Bushido,
+the author's training app, which holds the WHOOP grant: Krakatoa sends
+`POST <BUSHIDO_API_URL>/api/whoop/owner` with
+`Authorization: Bearer <BUSHIDO_API_TOKEN>` and the body
+`{ "method": "training", "args": [{ "days": 30 }] }`, and keeps only the daily
+calories (and the body weight) from the answer. This is **off until both a URL
+and a token are set**, in Settings → WHOOP, through Bushido, or with
+`BUSHIDO_API_URL` (a loopback address such as `http://127.0.0.1:8099` is
+typical) and `BUSHIDO_API_TOKEN`. There is no default URL. While it is off,
+Krakatoa never contacts Bushido, `/api/whoop` answers `configured: false`, and
+the day screen has no energy panel. Bushido's error text (its "no WHOOP set
+up", a wrong token, a rate limit, or WHOOP's own "reconnect WHOOP") is shown
+beside the refresh button as it arrives. Changing the URL in Settings stops the
+existing token from being sent: enter the token for the new URL along with it.
+
+Anyone running this without Bushido could replace `server/whoop.js` with a
+reader for some other source of daily energy expenditure.
+
+### Totem bridge: the habit push
+
+Krakatoa can write one habit record per logged day to a bridge run by the
+author's personal assistant, Totem. This is **off on a fresh install**. While
+it is off, Krakatoa never contacts the bridge. Turn it on in Settings → Totem
+bridge, or with `KRAKATOA_TOTEM=1` or `KRAKATOA_TOTEM_URL`. It
 needs a bridge URL (default `http://127.0.0.1:8787`) and the bridge secret: either
 `BRIDGE_SECRET`, one pasted in Settings, or the `BRIDGE_SECRET=` line of Totem's
 `.env` (`KRAKATOA_TOTEM_ENV`, which has no default). Changing the bridge URL in
 Settings stops any existing secret from being sent: enter the secret for the new
-URL along with it. To create the habit once, run `node server/totem.js --ensure`.
-AGENTS.md §3e and §4 have the details.
-
-Anyone running this without Totem could replace `server/whoop.js` with a
-reader for some other source of daily energy expenditure.
+URL along with it. To create the habit once, run `node server/totem.js --ensure`;
+the Test button checks that the habit is there.
 
 ### MCP
 
@@ -215,7 +233,7 @@ These are disposable caches, safe to delete:
 
 - `data/foods.json` holds every food that has resolved
 - `data/images/` holds proxied product photos
-- `data/whoop.json` mirrors the bridge
+- `data/whoop.json` mirrors Bushido's WHOOP figures
 
 `data/ai/` holds Ask AI threads and their photos. `data/menus/learned.json` holds
 menus Ask AI has learned. `data/settings.json` and `data/owner.json` hold the

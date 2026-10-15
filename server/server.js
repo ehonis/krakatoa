@@ -12,7 +12,7 @@
  *   GET  /api/me                  who is signed in, and which features are configured
  *   GET|PUT /api/settings         Settings, secrets masked. See server/settings.js.
  *   GET  /api/settings/ai/status  is the CLI installed and signed in
- *   POST /api/settings/test       { what: 'ai'|'usda'|'nutritionix'|'totem' }
+ *   POST /api/settings/test       { what: 'ai'|'usda'|'nutritionix'|'totem'|'bushido' }
  *   POST /api/settings/token      a new API token for machine callers (shown once)
  *   GET  /api/health              liveness + paths
  *   GET  /api/state               { version, updatedAt, state }
@@ -31,7 +31,7 @@
  *   GET  /api/restaurant?q=       chain menu items (Nutritionix; needs a key)
  *   GET  /api/restaurant/item?id= one menu item in full, with its macros
  *   GET  /api/whoop               cached daily calorie burn (data/whoop.json)
- *   POST /api/whoop/pull          refetch from the bridge now (the button)
+ *   POST /api/whoop/pull          refetch from Bushido now (the button)
  *   GET  /api/image?gtin=&u=      one product photo, proxied and cached to disk
  *   GET  /api/recent              foods worth offering again, most recent first
  *   GET  /api/day?date=           one day resolved: total, target, what filled it
@@ -82,7 +82,7 @@ const BACKUP_DIR = path.join(DATA_DIR, 'backups')
 /* Proxied product photos, one JPEG per gtin. Disposable — delete it and the next
    scan refetches. Same disposition as data/foods.json. */
 const IMAGE_DIR = path.join(DATA_DIR, 'images')
-/* WHOOP's daily burn, mirrored from Totem's bridge. A CACHE — see server/whoop.js. */
+/* WHOOP's daily burn, mirrored from Bushido. A CACHE — see server/whoop.js. */
 const WHOOP_FILE = path.join(DATA_DIR, 'whoop.json')
 
 const PORT = Number(process.env.KRAKATOA_PORT || 8101)
@@ -275,10 +275,12 @@ const nixConfig = () => {
   return { nutritionixId: n.id.value, nutritionixKey: n.key.value }
 }
 const totemCfg = () => settingsMod.totemConfig(eff())
+const bushidoCfg = () => settingsMod.bushidoConfig(eff())
 
-/* WHOOP's burn comes only through the Totem bridge. With the bridge off, the
-   store answers "not configured" and the day screen shows no energy panel. */
-const whoopStore = whoop.makeStore(WHOOP_FILE, { config: totemCfg })
+/* WHOOP's burn comes only from Bushido, which holds the grant. With no Bushido
+   URL and token, the store answers "not configured" and the day screen shows
+   no energy panel. */
+const whoopStore = whoop.makeStore(WHOOP_FILE, { config: bushidoCfg })
 
 /* -------------------------------------------------------------------- store */
 
@@ -608,7 +610,7 @@ async function api(req, res, url) {
       authMode: e.auth.mode,
       features: {
         ai: aiReady(),
-        whoop: !!totemCfg(),
+        whoop: !!bushidoCfg(),
         totem: !!totemCfg(),
         usda: !!e.usda.value,
         nutritionix: !!nutritionix.credsFrom(nixConfig()),
@@ -623,7 +625,7 @@ async function api(req, res, url) {
   /*
    * Changing settings (and the Test buttons, which reach out from the server)
    * needs a signed-in browser session, never an API token: a token handed to an
-   * MCP client must not be able to rewrite keys or the bridge URL. In proxy mode
+   * MCP client must not be able to rewrite keys or the bridge and Bushido URLs. In proxy mode
    * there are no sessions, so it needs the request to come from this machine,
    * which is where cloudflared and local reverse proxies connect from.
    */
@@ -635,7 +637,7 @@ async function api(req, res, url) {
   if (p === '/api/settings' && req.method === 'PUT') {
     let patch
     const body = await readBody(req, 64 * 1024)
-    try { patch = settingsMod.guardTotemUrl(settingsMod.cleanPatch(body), eff()) } catch (e) { return send(res, 400, { error: e.message }) }
+    try { patch = settingsMod.guardUrls(settingsMod.cleanPatch(body), eff()) } catch (e) { return send(res, 400, { error: e.message }) }
     settings.save(patch)
     return send(res, 200, { ...settingsMod.publicView(eff()), owner: auth.owner() })
   }
@@ -1061,7 +1063,13 @@ async function testIntegration(what) {
       return done(true, `Answered with ${out.foods.length} results.`)
     }
     if (what === 'totem') {
-      if (!totemCfg()) return done(false, 'The Totem bridge is off, or no bridge secret was found.')
+      const cfg = totemCfg()
+      if (!cfg) return done(false, 'The Totem bridge is off, or no bridge secret was found.')
+      const found = await totem.findHabit(cfg)
+      return done(true, found ? `Connected. Habit "${found.id}" is there.` : `Connected, but there is no habit "${cfg.habit}" yet: run node server/totem.js --ensure.`)
+    }
+    if (what === 'bushido') {
+      if (!bushidoCfg()) return done(false, 'Bushido needs a URL and a token.')
       const doc = await whoopStore.refresh()
       return doc.error ? done(false, doc.error) : done(true, `Connected. ${Object.keys(doc.burn || {}).length} days of WHOOP burn.`)
     }

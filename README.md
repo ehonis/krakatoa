@@ -52,7 +52,8 @@ Formerly called **Fuel** (renamed 2026-10-02).
   that it is one tap. Favourites ("stars") pin foods you buy.
 - **One screen per food.** It shows the food, a way to fix the entry you tapped,
   and every time you have logged it.
-- **WHOOP energy balance.** Shows eaten vs. burned on one track. It won't give a
+- **WHOOP energy balance** (optional, read from Bushido, which holds the WHOOP
+  connection). Shows eaten vs. burned on one track. It won't give a
   verdict on a day that is still being counted or was never logged, and compares
   a partial day against your typical complete day.
 - **Water**, with quick-add buttons for common container sizes and a 64 oz
@@ -83,7 +84,8 @@ server/     Node HTTP server with zero npm dependencies (Node built-ins only)
   nutrition.js  normalises both databases into one food shape
   label.js, ai.js, aithreads.js, learned.js   label reader and Ask AI (headless `claude`)
   mcp.js      MCP Streamable HTTP endpoint
-  whoop.js, totem.js   optional bridge integration (WHOOP burn, habit push)
+  whoop.js    optional WHOOP burn, read from Bushido (which holds the grant)
+  totem.js    optional Totem bridge: the habit push
   digest.js   compact day rollup written to data/digest.json for other tools
 content/    generated data: basics.json (USDA); restaurants.json (chains, optional)
 scripts/    generators for content/, with one reader per way a chain publishes

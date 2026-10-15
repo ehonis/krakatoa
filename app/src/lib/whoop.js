@@ -7,7 +7,7 @@
  * background, so a reload is as current as anything needs to be.
  *
  * `refresh` is the exception, and it is a BUTTON. It is the one synchronous path
- * to the bridge — everything else serves the cache and refetches behind itself —
+ * to Bushido — everything else serves the cache and refetches behind itself —
  * because the case it exists for is standing there having just finished a
  * workout, wanting the number to catch up now rather than within twenty minutes.
  */

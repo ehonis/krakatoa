@@ -36,7 +36,7 @@ disk. Default port **8101**.
 | The generic foods | `content/basics.json` + `app/src/lib/basics.js` |
 | …and the script that generates them | `scripts/basics.build.mjs` |
 | Optional Totem bridge: habit push | `server/totem.js` |
-| Optional Totem bridge: WHOOP's daily burn, and the deficit | `server/whoop.js` + `app/src/lib/whoop.js` |
+| Optional WHOOP daily burn, read from Bushido, and the deficit | `server/whoop.js` + `app/src/lib/whoop.js` |
 | Chain menus (OPTIONAL file: every reader must cope with it absent) | `scripts/restaurants.build.mjs` → `content/restaurants.json` |
 | …one reader per way a chain publishes | `scripts/restaurants/*.mjs` |
 | …and the bowl or order built from one | `app/src/lib/restaurants.js` + `app/src/bowl.jsx` |
@@ -120,7 +120,8 @@ shows which build is being served.
   backslashes. Do not go back to a regex.
 - **Machine callers** (MCP clients, scripts) use `Authorization: Bearer <token>`:
   the API token from Settings (`KRAKATOA_API_TOKEN`), or the Totem bridge
-  secret. A bearer opens `/api/*` and `/mcp`, never the pages.
+  secret. (The Bushido token goes the other way: Krakatoa sends it to Bushido,
+  and it opens nothing here.) A bearer opens `/api/*` and `/mcp`, never the pages.
 - **The iPhone app** (`mobile/`) signs in with the owner's password like a
   browser, but sends `X-Krakatoa-Client: native` and gets the session in the
   JSON reply instead of a cookie (also on a password change). It sends it back
@@ -142,7 +143,9 @@ shows which build is being served.
   (`settingsWriteRefused`). Proxy mode on a non-loopback bind logs a warning.
 - **A changed bridge URL** sets `totem.ownSecretOnly` (`guardTotemUrl`), so
   neither `BRIDGE_SECRET` nor Totem's .env is sent to the new host; only a
-  secret entered for it.
+  secret entered for it. A changed Bushido URL does the same for
+  `BUSHIDO_API_TOKEN` (`bushido.ownTokenOnly`, `guardBushidoUrl`); the PUT
+  runs both through `guardUrls`.
 
 ### Settings (`server/settings.js`, `app/src/settings.jsx`)
 
@@ -168,9 +171,13 @@ reaches outside the app off**:
 
 - **AI.** Without a CLI, `/api/label` and `/api/ask` answer 503 with
   `setup: 'ai'`, and the screens show "Set up AI in Settings" instead of an error.
-- **The Totem bridge** (WHOOP burn and the habit push). While off, nothing
-  contacts it, `/api/whoop` answers `configured: false`, and the day has no
-  energy panel. `totemConfig()` returning null is the off switch everywhere.
+- **The Totem bridge** (the habit push). While off, nothing contacts it.
+  `totemConfig()` returning null is the off switch everywhere.
+- **Bushido** (WHOOP burn). On only with a URL and a token
+  (`BUSHIDO_API_URL`, `BUSHIDO_API_TOKEN`, or Settings); there is no default
+  URL and no on switch. While off, nothing contacts it, `/api/whoop` answers
+  `configured: false`, `features.whoop` is false, and the day has no energy
+  panel. `bushidoConfig()` returning null is the off switch.
 - **The digest file** (`data/digest.json`). `/api/digest` still answers live.
 
 `settings.migrate()` runs once per data dir (when `settings.json` is absent).
@@ -179,12 +186,14 @@ bridge and the digest on. With no `owner.json` it predates sign-in and gets
 `auth.mode: proxy`; **with an `owner.json` it never gets proxy**. The legacy
 Totem `.env` path is recorded only if that file exists; it has no default.
 Nobody upgrading should find their setup switched off. The "off" defaults are
-for fresh installs only. `server/install.test.js` boots real servers for all
+for fresh installs only. (One deliberate exception: WHOOP moved from the bridge
+to Bushido, and an upgraded install needs the Bushido URL and token set to keep
+the energy panel. Nothing is migrated for it.) `server/install.test.js` boots real servers for all
 three paths (fresh, proxy, existing). Keep it passing.
 
 There is no `examples/` directory and nothing is seeded: `content/` is generic
 (USDA foods and chain menus), and there are no timers, jobs or scheduled tasks.
-The only background work is a WHOOP refresh on read when the bridge is on, and
+The only background work is a WHOOP refresh on read when Bushido is set up, and
 resuming Ask AI threads that were mid-run at restart.
 
 ## 3. A barcode carries no nutrition, and that is the whole design
@@ -370,10 +379,17 @@ Two traps:
 
 ### WHOOP: under or over (optional)
 
-`GET /api/whoop` mirrors the Totem bridge into `data/whoop.json`, and only when
-the bridge is on. **One token holder**: WHOOP rotates its refresh token and
-invalidates the old pair, so the bridge holds it and Krakatoa never does. The
-cache is **disposable**, and **nothing blocks on it**.
+`GET /api/whoop` mirrors Bushido's WHOOP figures into `data/whoop.json`, and
+only when Bushido is set up. **One token holder**: WHOOP rotates its refresh
+token and invalidates the old pair, so Bushido holds it and Krakatoa never
+does. Krakatoa asks with `POST <BUSHIDO_API_URL>/api/whoop/owner`,
+`Authorization: Bearer <BUSHIDO_API_TOKEN>` and
+`{ "method": "training", "args": [{ "days": N }] }`; Bushido answers
+`200 { result }` (the training payload; only `recovery[].calories`, `strain`
+and `body.weightLb` are kept) or a non-2xx `{ error, needsReauth?, rateLimited? }`
+(409 no WHOOP set up, 403 wrong token, 429 rate limited, 502 WHOOP failed),
+whose `error` is shown verbatim. The cache is **disposable**, and **nothing
+blocks on it**. Pinned in `server/whoop.test.js`.
 
 The design problem is honesty. `balanceFor` handles it, and the flags are the
 feature:
@@ -385,9 +401,9 @@ feature:
 - **`untracked`**: a day with nothing logged is not a 2,800 deficit, it is a day
   the app was not opened.
 
-**The refresh button** is the only synchronous path to the bridge. It shows how
-stale the number is; **a failed pull keeps the previous numbers** with the
-bridge's own error text beside them; with no balance at all, an error still
+**The refresh button** is the only synchronous path to Bushido. It shows how
+stale the number is; **a failed pull keeps the previous numbers** with
+Bushido's own error text beside them; with no balance at all, an error still
 renders the panel and the button.
 
 **The panel is a tug of war on one track**: eaten from the left, burned from the
@@ -580,7 +596,7 @@ the model in 30 KB chunks, three at a time, every item verified. Use the
 regional variants, normalise categories, and do not count identical numbers
 under another label as a second size.
 
-## 12. Other programs: MCP, and the optional Totem bridge
+## 12. Other programs: MCP, the optional Totem bridge, and Bushido
 
 **MCP.** `server/mcp.js` serves MCP Streamable HTTP (JSON replies) at `POST /mcp`,
 with a bearer token unless sign-in is left to a proxy. 16 tools: `get_day`,
@@ -599,7 +615,7 @@ prefix because gateways namespace them (`krakatoa__log_food`).
 - **Every tool states all four hints**; deletes are `destructiveHint` and the
   descriptions say to ask first. Tested in `server/mcp.test.js`.
 
-**The Totem bridge** (off by default; Settings or `KRAKATOA_TOTEM=1`). Two wires:
+**The Totem bridge** (off by default; Settings or `KRAKATOA_TOTEM=1`). One wire:
 
 - **A habit push.** `server/totem.js` posts one record per DAY: calories as
   `value`, the macro split as `parts`, the foods as the note, `count` = foods
@@ -607,8 +623,11 @@ prefix because gateways namespace them (`krakatoa__log_food`).
   the last write win). **Fire and forget**: the bridge being down never fails a
   log. **The streak is whether the day was TRACKED**, not whether it was a good
   day, so bad days still get logged. `node server/totem.js --ensure` creates the
-  habit once; it is deliberately never called from the request path.
-- **WHOOP burn**, read from the bridge (§8).
+  habit once; it is deliberately never called from the request path. The
+  Settings Test only reads (`findHabit`).
+
+**Bushido** (off until a URL and token are set): WHOOP burn, read from Bushido,
+which holds the WHOOP grant (§8). It used to come through the bridge.
 
 **The digest file** (off by default): every write regenerates
 `data/digest.json`: today's foods, a fortnight of totals, targets, the average
