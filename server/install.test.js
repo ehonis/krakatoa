@@ -7,12 +7,12 @@
  *   - FRESH: nothing is reachable until the owner is created from the one-time
  *     setup link printed to stdout; then the session cookie works, a bearer
  *     token works for machine callers, and every outside link (AI, Totem bridge,
- *     WHOOP, digest file) is off and says so instead of failing.
+ *     WHOOP through Bushido, digest file) is off and says so instead of failing.
  *   - PROXY: KRAKATOA_AUTH=proxy asks for no sign-in at all.
  *   - EXISTING: a data dir that already holds a log behaves as it did before
  *     sign-in existed, with no new env.
  *
- * HOME and PATH point at empty places, so no real `claude` or Totem is found.
+ * HOME and PATH point at empty places, so no real `claude`, Totem or Bushido is found.
  */
 
 const assert = require('assert')
@@ -155,6 +155,9 @@ test('fresh install: setup token, owner, session, bearer, everything off', async
   assert.match(r.json.error, /Settings/)
   r = await http(s.base, '/api/settings/test', { method: 'POST', cookie, body: { what: 'totem' } })
   assert.equal(r.json.ok, false)
+  r = await http(s.base, '/api/settings/test', { method: 'POST', cookie, body: { what: 'bushido' } })
+  assert.equal(r.json.ok, false)
+  assert.match(r.json.detail, /URL and a token/)
 
   // Settings: secrets go in and never come back out.
   r = await http(s.base, '/api/settings', { method: 'PUT', cookie, body: { usda: { key: 'usda-secret-123456' }, auth: { mode: 'proxy' } } }) // gitleaks:allow (test fixture)
@@ -360,6 +363,47 @@ test('no chain menu file: the server, the menus and the MCP all work without it'
   const list = (await http(s.base, '/mcp', { body: { jsonrpc: '2.0', id: 2, method: 'tools/list' } })).json.result.tools
   assert.ok(!/Chipotle|McDonald|Panera|Culver|Bibibop/.test(JSON.stringify(list)), 'no tool promises a chain that is not there')
   assert.doesNotMatch(s.log(), /restaurants|ENOENT|Error/i, 'nothing logged about the missing file')
+})
+
+/* ---------------------------------------------------------------- bushido */
+
+test('WHOOP comes from Bushido when its URL and token are set, and from nowhere else', async () => {
+  const seen = []
+  const fake = require('http').createServer((req, res) => {
+    let raw = ''
+    req.on('data', c => { raw += c })
+    req.on('end', () => {
+      seen.push({ url: req.url, auth: req.headers.authorization, body: raw })
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ result: { ok: true, body: { weightLb: 170 }, recovery: [{ date: '2026-10-13', calories: 2500, strain: 9 }] } }))
+    })
+  })
+  await new Promise(r => fake.listen(0, '127.0.0.1', r))
+  try {
+    const url = `http://127.0.0.1:${fake.address().port}`
+    const s = await boot({ KRAKATOA_AUTH: 'proxy', BUSHIDO_API_URL: `${url}/`, BUSHIDO_API_TOKEN: 'bushido-token-xyz' }) // gitleaks:allow (test fixture)
+    const me = (await http(s.base, '/api/me')).json
+    assert.equal(me.features.whoop, true)
+    assert.equal(me.features.totem, false, 'the bridge is a separate switch')
+
+    const set = await http(s.base, '/api/settings')
+    assert.ok(!set.text.includes('bushido-token-xyz'), 'the token is masked')
+    assert.equal(set.json.bushido.connected, true)
+    assert.equal(set.json.bushido.token.locked, true)
+
+    const r = await http(s.base, '/api/whoop/pull', { method: 'POST' })
+    assert.equal(r.json.configured, true)
+    assert.deepEqual(r.json.burn, { '2026-10-13': { kcal: 2500, strain: 9 } })
+    assert.equal(seen.at(-1).url, '/api/whoop/owner')
+    assert.equal(seen.at(-1).auth, 'Bearer bushido-token-xyz')
+    assert.deepEqual(JSON.parse(seen.at(-1).body), { method: 'training', args: [{ days: 30 }] })
+
+    const t = await http(s.base, '/api/settings/test', { method: 'POST', body: { what: 'bushido' } })
+    assert.equal(t.json.ok, true)
+    assert.match(t.json.detail, /1 days of WHOOP burn/)
+  } finally {
+    await new Promise(r => fake.close(r))
+  }
 })
 
 test('existing install with KRAKATOA_AUTH=builtin asks for setup', async () => {

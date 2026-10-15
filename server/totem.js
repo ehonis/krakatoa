@@ -87,6 +87,13 @@ async function syncDay(state, digest, date, cfg) {
   }
 }
 
+/** The habit this app writes to, or null when Totem does not have it. Read-only: the Settings Test. */
+async function findHabit(cfg) {
+  const payload = await call(cfg, 'GET', '/api/habits')
+  const habits = payload?.habits || payload || []
+  return habits.find(h => h.id === cfg?.habit || String(h.name || '').toLowerCase() === HABIT_NAME.toLowerCase()) || null
+}
+
 /**
  * Create the habit if Totem does not have it. Idempotent and deliberately NOT
  * called from the request path — a food log must never create things in another
@@ -94,9 +101,7 @@ async function syncDay(state, digest, date, cfg) {
  */
 async function ensureHabit(cfg) {
   const HABIT_ID = cfg?.habit
-  const payload = await call(cfg, 'GET', '/api/habits')
-  const habits = payload?.habits || payload || []
-  const found = habits.find(h => h.id === HABIT_ID || h.name.toLowerCase() === HABIT_NAME.toLowerCase())
+  const found = await findHabit(cfg)
   if (found) return { created: false, id: found.id, name: found.name }
 
   await call(cfg, 'POST', '/api/habits', {
@@ -120,7 +125,7 @@ async function ensureHabit(cfg) {
 
 const status = () => ({ ...last })
 
-module.exports = { syncDay, ensureHabit, status, noteFor }
+module.exports = { syncDay, ensureHabit, findHabit, status, noteFor }
 
 /* node server/totem.js --ensure   — create the habit in Totem, once. Reads the
    same settings the server does (KRAKATOA_DATA_DIR, env, data/settings.json). */

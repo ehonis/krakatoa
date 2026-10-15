@@ -131,9 +131,9 @@ test('a failed pull keeps the numbers AND says why they did not move', () => {
 
 test('with NO balance at all, an error still renders a panel with a way out', () => {
   // This is the state someone presses refresh to escape. Rendering nothing would
-  // leave a bridge that is down looking exactly like a feature that is off.
-  const html = render(null, { onRefresh: () => {}, whoop: { error: 'no BRIDGE_SECRET found' } })
-  assert.ok(html.includes('no BRIDGE_SECRET found'))
+  // leave a Bushido that is down looking exactly like a feature that is off.
+  const html = render(null, { onRefresh: () => {}, whoop: { error: 'Bushido has no WHOOP connection' } })
+  assert.ok(html.includes('Bushido has no WHOOP connection'))
   assert.ok(html.includes('Refresh from WHOOP'))
   // …but no error and no balance is still nothing, as before.
   assert.equal(render(null, { onRefresh: () => {}, whoop: { burn: {} } }), '')

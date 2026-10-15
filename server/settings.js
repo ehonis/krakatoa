@@ -13,10 +13,12 @@
  *      keeps its keys without a migration step.
  *
  * FRESH INSTALL vs EXISTING INSTALL. Everything that reaches another app (the
- * Totem bridge: WHOOP burn and the habit push; the digest file Bushido reads) is
- * OFF for a fresh install. An install that already has a log is an existing one,
- * and the first time this code runs there it writes settings.json with those
- * links ON, because that is how it already behaved. If it also has no owner
+ * Totem bridge's habit push; WHOOP burn read from Bushido; the digest file
+ * Bushido reads) is OFF for a fresh install. An install that already has a log
+ * is an existing one, and the first time this code runs there it writes
+ * settings.json with the bridge and the digest ON, because that is how it
+ * already behaved. Bushido has no on switch of its own: it is on when it has a
+ * URL and a token, and nothing is migrated for it. If it also has no owner
  * account it predates sign-in, so sign-in is left to the proxy it was behind.
  * An owner account means sign-in was already in use: never proxy then.
  * Nobody upgrading should find their setup quietly switched off.
@@ -194,6 +196,19 @@ function makeSettings({ dataDir, env = process.env, log = console.log }) {
     const totemHabit = src('KRAKATOA_TOTEM_HABIT', s.totem?.habit)
     if (!totemHabit.value) { totemHabit.value = DEFAULTS.totemHabit; totemHabit.from = 'default' }
 
+    /*
+     * Bushido, the one holder of the owner's WHOOP grant. On when it has a URL
+     * and a token, from the environment or Settings; there is no default URL,
+     * so an install that never names one never contacts it. As with the bridge,
+     * a token from the environment belongs to the URL it was set up with:
+     * changing the URL in Settings sets `ownTokenOnly`.
+     */
+    const bushidoUrl = src('BUSHIDO_API_URL', s.bushido?.url)
+    const bushidoOwnTokenOnly = s.bushido?.ownTokenOnly === true
+    const bushidoToken = bushidoOwnTokenOnly
+      ? (str(s.bushido?.token) ? { value: str(s.bushido.token), from: 'settings', env: 'BUSHIDO_API_TOKEN' } : { value: '', from: null, env: 'BUSHIDO_API_TOKEN' })
+      : src('BUSHIDO_API_TOKEN', s.bushido?.token)
+
     const digestFlag = flag(env.KRAKATOA_DIGEST_FILE)
     const digestFile = digestFlag !== undefined
       ? { value: digestFlag, from: 'env' }
@@ -208,6 +223,7 @@ function makeSettings({ dataDir, env = process.env, log = console.log }) {
       usda,
       nutritionix: { id: nixId, key: nixKey },
       totem: { enabled: totemEnabled, url: totemUrl, envFile: totemEnvFile, secret: totemSecret, habit: totemHabit, ownSecretOnly },
+      bushido: { url: bushidoUrl, token: bushidoToken, ownTokenOnly: bushidoOwnTokenOnly },
       digestFile,
       publicUrl,
       apiToken,
@@ -239,6 +255,13 @@ function totemConfig(eff) {
   const t = eff.totem
   if (!t.enabled.value || !t.secret.value) return null
   return { url: t.url.value.replace(/\/+$/, ''), secret: t.secret.value, habit: t.habit.value }
+}
+
+/** Where WHOOP is read from: Bushido's `{ url, token }`, or null when it has no URL or no token. */
+function bushidoConfig(eff) {
+  const b = eff.bushido
+  if (!b?.url.value || !b.token.value) return null
+  return { url: b.url.value.replace(/\/+$/, ''), token: b.token.value }
 }
 
 /* -------------------------------------------------------- for the browser */
@@ -276,6 +299,11 @@ function publicView(eff) {
       habit: field(eff.totem.habit),
       connected: !!totemConfig(eff),
     },
+    bushido: {
+      url: field(eff.bushido.url),
+      token: field(eff.bushido.token, true),
+      connected: !!bushidoConfig(eff),
+    },
     digestFile: { value: eff.digestFile.value, from: eff.digestFile.from, locked: eff.digestFile.from === 'env' },
     publicUrl: field(eff.publicUrl),
     apiToken: field(eff.apiToken, true),
@@ -296,6 +324,7 @@ const EDITABLE = {
   usda: { key: 'secret' },
   nutritionix: { id: 'text', key: 'secret' },
   totem: { enabled: 'bool', url: 'url', secret: 'secret', habit: 'text' },
+  bushido: { url: 'url', token: 'secret' },
   digestFile: 'bool',
   publicUrl: 'url',
 }
@@ -334,25 +363,32 @@ function cleanPatch(body) {
 }
 
 /*
- * A changed (or cleared) bridge URL drops any secret it did not come with: the stored one,
- * BRIDGE_SECRET and Totem's .env all belong to the old URL. Only a secret in
- * the same patch goes with the new URL. Returns the patch to save.
+ * A changed (or cleared) URL drops any secret it did not come with: for the
+ * bridge the stored one, BRIDGE_SECRET and Totem's .env; for Bushido the stored
+ * token and BUSHIDO_API_TOKEN. All of them belong to the old URL. Only a secret
+ * in the same patch goes with the new URL. Returns the patch to save.
  */
-function guardTotemUrl(patch, eff) {
-  if (!patch?.totem || !('url' in patch.totem)) return patch
-  const url = patch.totem.url
-  // Clearing a stored URL sends the bridge somewhere else too (the env value or
-  // the default), so it is a change of destination like any other. Clearing
+function guardUrl(patch, current, section, secretKey, onlyKey) {
+  if (!patch?.[section] || !('url' in patch[section])) return patch
+  const url = patch[section].url
+  // Clearing a stored URL sends the requests somewhere else too (the env value
+  // or the default), so it is a change of destination like any other. Clearing
   // when nothing was stored changes nothing.
   if (url === null) {
-    if (eff.totem.url.from !== 'settings') return patch
-  } else if (url.replace(/\/+$/, '') === eff.totem.url.value.replace(/\/+$/, '')) {
+    if (current.from !== 'settings') return patch
+  } else if (url.replace(/\/+$/, '') === current.value.replace(/\/+$/, '')) {
     return patch
   }
-  const totem = { ...patch.totem, ownSecretOnly: true }
-  if (!('secret' in patch.totem)) totem.secret = null
-  return { ...patch, totem }
+  const next = { ...patch[section], [onlyKey]: true }
+  if (!(secretKey in patch[section])) next[secretKey] = null
+  return { ...patch, [section]: next }
 }
+
+const guardTotemUrl = (patch, eff) => guardUrl(patch, eff.totem.url, 'totem', 'secret', 'ownSecretOnly')
+const guardBushidoUrl = (patch, eff) => guardUrl(patch, eff.bushido.url, 'bushido', 'token', 'ownTokenOnly')
+
+/** Every URL guard, for the Settings PUT. */
+const guardUrls = (patch, eff) => guardBushidoUrl(guardTotemUrl(patch, eff), eff)
 
 /* ------------------------------------------------------------- AI status */
 
@@ -391,4 +427,4 @@ function aiReady(eff) {
   try { fs.accessSync(eff.ai.bin.value, fs.constants.X_OK); return true } catch { return false }
 }
 
-module.exports = { makeSettings, publicView, cleanPatch, guardTotemUrl, aiEnv, aiStatus, aiReady, totemConfig, mask, secretFromEnvFile, AI_BACKENDS }
+module.exports = { makeSettings, publicView, cleanPatch, guardTotemUrl, guardBushidoUrl, guardUrls, aiEnv, aiStatus, aiReady, totemConfig, bushidoConfig, mask, secretFromEnvFile, AI_BACKENDS }
