@@ -28,7 +28,7 @@ const CATALOG = new URL('../content/restaurants.json', import.meta.url)
 if (!fs.existsSync(CATALOG)) {
   // The chain menus are optional and not every copy ships them. Nothing here
   // can be checked without them.
-  console.log('restaurants: skipped (content/restaurants.json is not built; optional, see `npm run build:menus`)')
+  console.log('restaurants: skipped (content/restaurants.json is not built; optional, see `pnpm run build:menus`)')
   process.exit(0)
 }
 const catalog = JSON.parse(fs.readFileSync(CATALOG))

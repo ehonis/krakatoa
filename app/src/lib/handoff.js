@@ -11,7 +11,7 @@
  *
  * Off unless configured at BUILD time:
  *   VITE_KRAKATOA_LEGACY_HOSTS="old.example.com=new.example.com,other.example=new.example.com"
- * (in app/.env.local, or the environment of `npm run build`).
+ * (in app/.env.local, or the environment of `pnpm run build`).
  */
 
 /** "a=b, c=d" -> { a: 'b', c: 'd' }. Anything malformed is ignored. */

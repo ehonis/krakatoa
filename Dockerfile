@@ -15,10 +15,12 @@ RUN apt-get update \
  && if [ "$WITH_CLAUDE" = "1" ]; then npm install -g @anthropic-ai/claude-code && npm cache clean --force; fi
 
 WORKDIR /srv/krakatoa
-COPY app/package.json app/package-lock.json app/
-RUN npm --prefix app ci --no-audit --no-fund
+RUN corepack enable pnpm
+COPY app/package.json app/pnpm-lock.yaml app/pnpm-workspace.yaml app/
+# Corepack takes pnpm's version from the package.json in the working directory.
+RUN cd app && pnpm install --frozen-lockfile
 COPY . .
-RUN npm --prefix app run build \
+RUN cd app && pnpm run build \
  && mkdir -p /data /home/node/.claude \
  && chown node:node /data /home/node/.claude
 

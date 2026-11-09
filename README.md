@@ -33,7 +33,7 @@ Formerly called **Fuel** (renamed 2026-10-02).
   by a script. None of the numbers are typed by hand.
 - **Restaurant menus (optional).** Build a bowl part by part or an order size by
   size, and watch the total update. The menu data is not necessarily included:
-  `npm run build:menus` generates it from each chain's own published nutrition
+  `pnpm run build:menus` generates it from each chain's own published nutrition
   information (see [Restaurant menus](docs/self-hosting.md#restaurant-menus-optional)).
   Without it the app works as normal and the menu screen says none are built.
 - **Nutrition label reader.** Photograph the Nutrition Facts panel and a headless
@@ -105,13 +105,14 @@ bugs that shaped them. Read it before changing anything substantial.
 
 ## Self-hosting quick start
 
-You need Node.js 22 or newer.
+You need Node.js 22 or newer and pnpm (`corepack enable pnpm` gives you the version
+`package.json` names).
 
 ```bash
 git clone https://github.com/ehonis/krakatoa.git
 cd krakatoa
-npm install      # installs the frontend's build tools (the server has no dependencies)
-npm start        # builds the app, then serves it on port 8101
+pnpm install     # installs the frontend's build tools (the server has no dependencies)
+pnpm start       # builds the app, then serves it on port 8101
 ```
 
 1. Look at the terminal. On first run the server prints a one-time link:
@@ -158,7 +159,7 @@ precedence over Settings. They are listed in [.env.example](.env.example).
 data and backups, regenerating the content files, the optional integrations,
 and running the app as a service.
 
-For development, run the server (`npm run serve`) and, beside it, `npm run dev`,
+For development, run the server (`pnpm run serve`) and, beside it, `pnpm run dev`,
 which starts Vite on port 5173. Vite proxies `/api`, `/mcp`, `/login` and
 `/setup` to the server on port 8101 (or `KRAKATOA_DEV_BACKEND`), keeping the
 browser's Host header, so sign-in works through 5173 unchanged.
@@ -166,9 +167,12 @@ browser's Host header, so sign-in works through 5173 unchanged.
 ## Tests
 
 ```bash
-npm test         # eslint (rules-of-hooks), the app and server suites, sign-in and fresh-install tests
-npm run build
+pnpm test        # eslint (rules-of-hooks), the app and server suites, sign-in and fresh-install tests
+pnpm run build
 ```
+
+The root and `app/` use pnpm, not npm: never run `npm install` or `npm ci` there (npm ignores
+`pnpm-lock.yaml`). The iPhone app in `mobile/` is the exception and stays on npm.
 
 These are the same steps CI runs (`.github/workflows/ci.yml`, from `app/`).
 

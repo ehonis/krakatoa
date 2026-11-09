@@ -2,6 +2,7 @@
   "name": "krakatoa-app",
   "private": true,
   "license": "MIT",
+  "packageManager": "pnpm@10.34.9",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ehonis/krakatoa.git",
@@ -11,7 +12,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "npm run lint && node handoff.test.js && npm run test:food && npm run test:combos && npm run test:restaurants && npm run test:label && npm run test:ask && npm run test:mcp && npm run test:macros && npm run test:whoop && npm run test:balance && npm run test:nutrition && npm run test:digest && npm run test:auth && node signout.test.js",
+    "test": "pnpm run lint && node handoff.test.js && pnpm run test:food && pnpm run test:combos && pnpm run test:restaurants && pnpm run test:label && pnpm run test:ask && pnpm run test:mcp && pnpm run test:macros && pnpm run test:whoop && pnpm run test:balance && pnpm run test:nutrition && pnpm run test:digest && pnpm run test:auth && node signout.test.js",
     "test:food": "node food.test.js",
     "test:nutrition": "node ../server/nutrition.test.js",
     "test:digest": "node ../server/digest.test.js",

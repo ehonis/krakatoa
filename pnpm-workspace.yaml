@@ -1,0 +1,3 @@
+# Settings only: the root package has no dependencies of its own. app/ and mobile/
+# are separate projects with their own lockfiles (app/pnpm-workspace.yaml).
+nodeLinker: hoisted

@@ -60,17 +60,23 @@ disk. Default port **8101**.
 | Cached product photos — disposable, one JPEG per gtin | `data/images/` |
 
 ```bash
-npm install && npm start    # installs app/ deps, builds, serves on 8101
-npm test                    # lint + every suite, including sign-in and fresh-install
-npm run build               # emits dist/ — A CHANGE IS NOT LIVE UNTIL YOU BUILD
+pnpm install && pnpm start  # installs app/ deps, builds, serves on 8101
+pnpm test                   # lint + every suite, including sign-in and fresh-install
+pnpm run build              # emits dist/ — A CHANGE IS NOT LIVE UNTIL YOU BUILD
 node scripts/basics.build.mjs           # regenerate the generic-food catalog
-npm run build:menus                     # optional chain menus (or name some: -- culvers chipotle)
+pnpm run build:menus                    # optional chain menus (or name some: culvers chipotle)
 ```
+
+**pnpm, not npm: never run `npm install` or `npm ci` at the root or in `app/`.** npm
+ignores `pnpm-lock.yaml` and writes its own tree. `mobile/` is the exception: it stays
+on npm (`npm ci` there): under pnpm its installed tree differed in 78 places (the bundle
+itself came out the same), and EAS's cloud build would switch to pnpm, which only a real
+build could check.
 
 Operational detail (Docker, a systemd unit, backups, every env var) is in
 `docs/self-hosting.md` and `.env.example`.
 
-**`npm test` starts with `eslint src`, and it is one rule: `rules-of-hooks`.**
+**`pnpm test` starts with `eslint src`, and it is one rule: `rules-of-hooks`.**
 It caught a real crash the hour it went in: `FoodView` called a `useMemo` below
 an early return, so the hook count changed the moment the store hydrated and
 React blanked the whole app with a minified #310. No render test can see that:
@@ -78,7 +84,7 @@ server rendering runs each component once, with a fresh instance, so both
 branches render perfectly on their own. Do not add a style config around it;
 formatting opinions would bury the one rule that matters.
 
-**`dist/` is served off disk, so `npm run build` is the step that makes app
+**`dist/` is served off disk, so `pnpm run build` is the step that makes app
 changes real.** Code in the repo, passing every test, while the phone runs a
 weeks-old bundle is a real failure mode. `grep -o 'assets/[^"]*' dist/index.html`
 shows which build is being served.
