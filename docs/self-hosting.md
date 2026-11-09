@@ -6,12 +6,14 @@ explains why each decision was made. This page covers how to run it.
 ## Build and run
 
 ```bash
-npm install      # runs `npm install` in app/ as well
-npm start        # npm run build, then node server/server.js on port 8101
+pnpm install     # runs `pnpm install` in app/ as well
+pnpm start       # pnpm run build, then node server/server.js on port 8101
 ```
 
-`npm run serve` starts the server without rebuilding. The server serves `dist/`
-straight off disk, so **app changes are not live until `npm run build` runs**.
+The root and `app/` use pnpm (`corepack enable pnpm` gives you the version `package.json`
+names); `mobile/` stays on npm. `pnpm run serve` starts the server without rebuilding. The
+server serves `dist/` straight off disk, so **app changes are not live until `pnpm run
+build` runs**.
 Server changes need a restart. The asset hash in `dist/index.html`
 (`grep -o 'assets/[^"]*' dist/index.html`) tells you which build is being served.
 
@@ -249,7 +251,7 @@ parse `state.json`.
 ```bash
 # Generic foods, from the USDA SR Legacy bulk download (URL in the script).
 curl -sL -o /tmp/fdc_sr.zip <URL from scripts/basics.build.mjs>
-npm run build:basics
+pnpm run build:basics
 ```
 
 ### Restaurant menus (optional)
@@ -266,8 +268,8 @@ terms before running it. The resulting data belongs to the chains and is not
 covered by this repository's MIT license.
 
 ```bash
-npm run build:menus                    # every chain
-npm run build:menus -- culvers panera  # just these; the others are kept as built
+pnpm run build:menus                   # every chain
+pnpm run build:menus culvers panera    # just these; the others are kept as built
 ```
 
 It needs network access and `pdftotext` (poppler-utils). The McDonald's
@@ -299,8 +301,8 @@ on the machine that serves the app, so nothing has to reach that machine from ou
 Each deploy:
 
 1. stops if the live checkout has uncommitted changes to tracked files or is not on `main`;
-2. fast-forwards it to `origin/main` (nothing new, nothing done), runs `npm ci` only if a
-   `package.json` or lockfile changed, and builds;
+2. fast-forwards it to `origin/main` (nothing new, nothing done), runs `pnpm install
+   --frozen-lockfile` only if a `package.json` or lockfile changed, and builds;
 3. restarts the service (`launchctl kickstart -k` on macOS,
    `systemctl --user restart` on Linux), then waits up to a minute for the health URL;
 4. if the build, the restart or the health check fails, resets to the commit it started
@@ -319,8 +321,10 @@ It does nothing until the repository is told where the install is:
 # runner gives the download and the token).
 ./config.sh --url https://github.com/<you>/<repo> --token <token> --labels krakatoa-deploy --no-default-labels
 ./svc.sh install && ./svc.sh start
-# Give it the PATH npm needs, in .env beside config.sh, e.g.:
-#   PATH=/opt/homebrew/opt/node/bin:/opt/homebrew/bin:/usr/bin:/bin
+# Give it the PATH node needs, in .env beside config.sh, e.g. (the workflow gets pnpm
+# from node's own Corepack, which Node 22 and 24 ship and Node 25+ does not, so use a
+# versioned node):
+#   PATH=/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/bin:/bin
 
 # Repository variables (Settings → Secrets and variables → Actions):
 gh variable set DEPLOY_DIR -b /path/to/the/live/checkout

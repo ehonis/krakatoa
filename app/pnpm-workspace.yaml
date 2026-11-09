@@ -1,0 +1,6 @@
+# Settings only: app/ is its own project with its own lockfile, not a workspace member.
+# A flat, npm-shaped node_modules (still hardlinked from pnpm's store).
+nodeLinker: hoisted
+# The only dependency whose install script runs (it fetches esbuild's platform binary).
+onlyBuiltDependencies:
+  - esbuild

@@ -54,6 +54,16 @@ jobs:
             exit 1
           fi
 
+      # pnpm at the version package.json names, from the Corepack that ships with node,
+      # so the runner's PATH needs only node on it.
+      - name: pnpm on the PATH
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/corepack-bin"
+          mkdir -p "$bin"
+          corepack enable --install-directory "$bin" pnpm
+          echo "$bin" >> "$GITHUB_PATH"
+
       - name: Pull
         id: pull
         run: |
@@ -71,20 +81,21 @@ jobs:
           fi
           echo "go=true" >> "$GITHUB_OUTPUT"
           changed=$(git diff --name-only "$before" "$after")
-          printf '%s\n' "$changed" | grep -qE '(^|/)package(-lock)?\.json$' && echo "deps=true" >> "$GITHUB_OUTPUT" || true
+          printf '%s\n' "$changed" | grep -qE '(^|/)(package(-lock)?\.json|pnpm-(lock|workspace)\.yaml)$' && echo "deps=true" >> "$GITHUB_OUTPUT" || true
           # What the iPhone app is built from: its own folder.
           printf '%s\n' "$changed" | grep -qE '^mobile/' && echo "mobile=true" >> "$GITHUB_OUTPUT" || true
           echo "Deploying $(git log --oneline -1) (was ${before:0:7})"
           git log --oneline "$before..$after"
 
+      # The root's postinstall installs app/ (pnpm --dir app install).
       - name: Install dependencies
         if: steps.pull.outputs.deps == 'true'
         run: |
-          npm ci --no-audit --no-fund
+          pnpm install --frozen-lockfile
 
       - name: Build
         if: steps.pull.outputs.go == 'true'
-        run: npm run build
+        run: pnpm run build
 
       - name: Restart
         if: steps.pull.outputs.go == 'true'
@@ -115,9 +126,10 @@ jobs:
           echo "::warning::Rolling back to ${{ steps.pull.outputs.before }}"
           git reset --hard --quiet "${{ steps.pull.outputs.before }}"
           if [ "${{ steps.pull.outputs.deps }}" = true ]; then
-            npm ci --no-audit --no-fund
+            # The commit rolled back to may predate pnpm (it has a package-lock.json).
+            if [ -f app/pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else npm ci --no-audit --no-fund; fi
           fi
-          npm run build
+          npm run build   # the root's build script, whichever manager that commit used
           if [ "$(uname)" = Darwin ]; then
             launchctl kickstart -k "gui/$(id -u)/$DEPLOY_SERVICE"
           else

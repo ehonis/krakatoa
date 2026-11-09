@@ -4,6 +4,7 @@
   "private": true,
   "description": "A self-hosted food log: barcode scanning, USDA basics, chain menus, Ask AI.",
   "license": "MIT",
+  "packageManager": "pnpm@10.34.9",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ehonis/krakatoa.git"
@@ -12,13 +13,13 @@
     "node": ">=22"
   },
   "scripts": {
-    "postinstall": "npm --prefix app install --no-audit --no-fund",
-    "build": "npm --prefix app run build",
+    "postinstall": "pnpm --dir app install --frozen-lockfile",
+    "build": "pnpm --dir app run build",
     "build:menus": "node scripts/restaurants.build.mjs",
     "build:basics": "node scripts/basics.build.mjs",
-    "start": "npm run build && node server/server.js",
+    "start": "pnpm run build && node server/server.js",
     "serve": "node server/server.js",
-    "dev": "npm --prefix app run dev",
-    "test": "npm --prefix app test && node server/nutritionix.test.js"
+    "dev": "pnpm --dir app run dev",
+    "test": "pnpm --dir app test && node server/nutritionix.test.js"
   }
 }

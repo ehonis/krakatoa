@@ -19,13 +19,15 @@ jobs:
         working-directory: app
     steps:
       - uses: actions/checkout@v4
+      # pnpm at the version package.json's packageManager names.
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: app/package-lock.json
-      - run: npm ci
-      # npm test lints, then runs the app and most server tests.
-      - run: npm test
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # pnpm test lints, then runs the app and most server tests.
+      - run: pnpm test
       - run: node ../server/nutritionix.test.js
-      - run: npm run build
+      - run: pnpm run build
